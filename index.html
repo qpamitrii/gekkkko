@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <title>Gecko – анонимный фотохостинг с автоочисткой метаданных</title>
+    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0, shrink-to-fit=no" name="viewport">
+    <!-- CSS Files -->
+    <link href="/css/bootstrap.css" rel="stylesheet">
+    <link href="/css/font-awesome.min.css" rel="stylesheet">
+    <link href="/css/drunken-parrot.css" rel="stylesheet">
+    <link href="/css/app.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script src="https://www.google.com/recaptcha/api.js?render=6LfWndMrAAAAAInmLjVcQecayj4iXFVrnW_0Lait"></script>
+    <!--[if lt IE 9]>
+      <script src="js/html5shiv.js"></script>
+    <![endif]-->
+</head>
+
+<script>
+    document.querySelector('input[name="resize"]').addEventListener('change', function() {
+        const resizeOptions = document.getElementById('resizeOptions');
+        if (this.checked) {
+            resizeOptions.style.display = 'block';
+        } else {
+            resizeOptions.style.display = 'none';
+        }
+    });
+</script>
+
+<body>
+    <div class="masthead main-masthead">
+        <div class="container">
+            <h1 class="masthead-title"><span> Gekkko </span></h1>
+            <p class="masthead-description"><span> Anonymous photohosting with automatic metadata cleaning </span></p>
+        </div>
+    </div>
+
+    <div class="container main-load-container">
+        <div class="row">
+            <div class="col-md-10 col-md-offset-1">
+                <form action="/upload" method="POST" id="uploadForm" class="form" aria-label="Upload" enctype="multipart/form-data">
+<!-- капча -->               <input type="hidden" name="g-recaptcha-response" id="g-recaptcha-response">
+                    
+                    <div class="form-group">
+                        <div class="panel panel-success main-load-container">
+                            <div class="panel-heading">
+                                <label class="upload-file-label" for="file">Upload files</label>
+                            </div>
+                            <div class="panel-body">
+                                <input class="form-control upload-file-control" name="image" type="file" id="file" required multiple>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-sm-12">
+                            <p class="text-muted"><strong>File types allowed:</strong> jpeg, png.<br>Don't upload photos larger than 10 MB. Max size is 5000x5000 px; Not more than 20 files at a time.<br><strong>Warning!</strong> If you upload more than one file at a time, all properties will apply to all photos.</p>
+                        </div>
+                    </div>
+
+
+
+                    <!--кАПЧА ЗДЕСЬ
+                    гпт говорит, что для гуглкапчи 3.0 не нужны поля для ввода-->
+                    
+
+
+
+                    <!-- Status message -->
+                    <div id="uploadStatus" class="upload-status"></div>
+
+                    <div class="form-group">
+                        <div class="row">
+                            <div class="col-sm-2"><label class="control-label" for="title">Description</label></div>
+                            <div class="col-sm-10">
+                                <textarea id="overview" class="form-control" name="overview" autofocus></textarea>
+                                <p class="text-muted">Leave this field blank if you don't want to add a description</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="row">
+                            <div class="col-sm-5"><label class="control-label"><input type="checkbox" name="allow_password"> Protect with password?</label></div>
+                            <div class="col-sm-5 col-sm-offset-2"><label class="control-label"><input type="checkbox" name="allow_selfdestruct"> Delete after N views?</label></div>
+                        </div>
+                        <div class="row">
+                            <div class="col-sm-5">
+                                <div class="row">
+                                    <div class="col-sm-3"><label class="control-label" for="password">Password</label></div>
+                                    <div class="col-sm-9"><input class="form-control" id="password" type="password" name="password" minlength="6" maxlength="32"></div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-sm-12">
+                                        <p class="text-muted">Password must be from 6 to 32 symbols</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-sm-5 col-sm-offset-2">
+                                <div class="row">
+                                    <div class="col-sm-6"><label class="control-label" for="selfdestruct">Number of views</label></div>
+                                    <div class="col-sm-6"><input class="form-control" type="number" id="selfdestruct" name="selfdestruct" min="1" max="100"></div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-sm-12">
+                                        <p class="text-muted">Number from 1 to 100. After the image reaches this count of views, it will be deleted.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="row">
+                            <div class="col-sm-12"><label class="control-label"><input type="checkbox" name="resize"> Resize picture?</label></div>
+                        </div>
+                        <div class="row">
+
+                            <div class="form-group" id="resizeOptions" style="display: none;"></div>
+                                <div class="col-sm-5">
+                                    <div class="row">
+                                        <div class="col-sm-3"><label class="control-label" for="resize_width">Width</label></div>
+                                        <div class="col-sm-9"><input class="form-control" id="resize_width" type="number" name="resize_width" min="400" max="3000"></div>
+                                    </div>
+                                </div>
+                                <div class="col-sm-5 col-sm-offset-2">
+                                    <div class="row">
+                                        <div class="col-sm-3"><label class="control-label" for="resize_height">Height</label></div>
+                                        <div class="col-sm-9"><input class="form-control" type="number" id="resize_height" name="resize_height" min="400" max="3000"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                        <div class="row">
+                            <div class="col-sm-12">
+                                <p class="text-muted">If checkbox is off or parameters are not correct, resize will not be applied</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="row">
+                            <div class="col-sm-12">
+                                <label class="control-label"><input type="checkbox" name="make_one_post" checked> Make one post from all pictures?</label>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-sm-12">
+                                <p class="text-muted">If checkbox is on, all pictures you upload will be in one single post.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-success btn-lg btn-embossed upload-btn">Upload</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+                
+    <div class="container">
+        <div class="row">
+            <div class="col-sm-4 col-sm-offset-4">
+                <div class="panel panel-info btc-donate-panel">
+                    <div class="panel-heading">
+                        <h3 class="panel-title">Bitcoin donations are welcome!</h3>
+                    </div>
+                    <div class="panel-body"><strong>bc1q3p87fqtj84dmcy6u6jyaefjft67qyjh8ccmuc7</strong></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer footer-default">
+        <div class="container">
+            <div class="copyright">
+                ©
+                <script>
+                    document.write(new Date().getFullYear())
+                </script>, All rights reserved.
+            </div>
+        </div>
+    </footer>
+
+    <script src="/js/jquery-1.12.4.min.js" type="text/javascript"></script>
+    <script src="/js/bootstrap.min.js" type="text/javascript"></script>
+    <script src="/js/bootstrap-switch.js" type="text/javascript"></script>
+    <script src="/js/checkbox.js" type="text/javascript"></script>
+    <script src="/js/radio.js" type="text/javascript"></script>
+    <script src="/js/toolbar.js" type="text/javascript"></script>
+    <script src="/js/app.js" type="text/javascript"></script>
+
+    <script>
+        // Обработка отправки формы
+        document.getElementById('uploadForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            //для капчи
+            grecaptcha.ready(function() {//site key
+                grecaptcha.execute('6LfWndMrAAAAAInmLjVcQecayj4iXFVrnW_0Lait', {action: 'upload'}).then(function(token) {
+                    // Вставляем токен в скрытое поле
+                    document.getElementById('g-recaptcha-response').value = token;
+
+                    // Теперь отправляем форму
+                    const statusElement = document.getElementById('uploadStatus');
+                    statusElement.textContent = 'Uploading files...';
+                    statusElement.className = 'upload-status';
+                    statusElement.style.display = 'block';
+
+                    const formData = new FormData(document.getElementById('uploadForm'));
+
+                    fetch('/upload', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => {
+                        if (response.redirected) {
+                            window.location.href = response.url;
+                        } else {
+                            return response.text().then(text => {
+                                throw new Error(text);
+                            });
+                        }
+                    })
+                    .catch(error => {
+                        statusElement.textContent = 'Error: ' + error.message;
+                        statusElement.className = 'upload-status status-error';
+                        console.error('Error:', error);
+                    });
+                });
+            });
+        });
+    </script>
+</body>
+</html>

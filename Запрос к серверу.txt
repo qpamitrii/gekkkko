@@ -1,0 +1,19 @@
+DELL@DESKTOP-BU0TVHK MINGW64 ~
+$ curl -I https://gekkk.co/captcha/inverse
+HTTP/1.1 403 Forbidden
+Date: Fri, 05 Sep 2025 07:31:53 GMT
+Content-Type: text/html; charset=UTF-8
+Connection: keep-alive
+X-Frame-Options: SAMEORIGIN
+Referrer-Policy: same-origin
+Cache-Control: private, max-age=0, no-store, no-cache, must-revalidate, post-check=0, pre-check=0
+Expires: Thu, 01 Jan 1970 00:00:01 GMT
+Report-To: {"endpoints":[{"url":"https:\/\/a.nel.cloudflare.com\/report\/v4?s=AvfZA36D4ebtHML79xCAmuDb5YJA%2BHrkwGvC8o7qF58JUW1SUh64MniPxcHmCQWPS2rEp3ytr8YBlAuWu8VU3nx3Rw%2FX%2FAMxKSLDEonYmsl9QPP4aDh1qiIZ"}],"group":"cf-nel","max_age":604800}
+NEL: {"success_fraction":0,"report_to":"cf-nel","max_age":604800}
+X-Robots-Tag: noindex, nofollow, noimageindex
+Server: cloudflare
+CF-RAY: 97a407964a166961-FRA
+server-timing: cfL4;desc="?proto=TCP&rtt=3039&min_rtt=2977&rtt_var=890&sent=5&recv=7&lost=0&retrans=0&sent_bytes=3118&recv_bytes=649&delivery_rate=1467828&cwnd=252&unsent_bytes=0&cid=d7f998b53368ad5f&ts=153&x=0"
+
+
+DELL@DESKTOP-BU0TVHK MINGW64 ~

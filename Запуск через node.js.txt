@@ -1,0 +1,11 @@
+3. Установите зависимости и запустите
+bash
+# Установите зависимости
+npm install express multer uuid
+
+
+cd D:\DownloadedWebSites
+cd \Gecko
+
+# Запустите сервер
+node server.js
