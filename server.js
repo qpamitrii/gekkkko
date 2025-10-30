@@ -215,10 +215,6 @@ app.post('/upload', upload.array('image', 20), async (req, res) => {
         }
 
 
-        if (fileIds.length === 0) {
-            return res.status(500).send('Не удалось обработать ни один файл');
-        }
-        const mainFileId = fileIds[0];
 
         // ✅ Получаем IP
         const clientIp = getClientIp(req);
@@ -247,6 +243,13 @@ app.post('/upload', upload.array('image', 20), async (req, res) => {
         } catch (err) {
             return res.status(400).send('Неверный формат номера телефона');
         }
+
+        
+        // После цикла for
+        if (fileIds.length === 0) {
+            return res.status(500).send('Не удалось обработать ни один файл');
+        }
+        const mainFileId = fileIds[0]; // ← ЭТО ОБЯЗАТЕЛЬНО!
 
         // ✅ Сохраняем в БД
         const sql = 'INSERT INTO uploads (file_id, phone, ip_address) VALUES (?, ?, ?)';
