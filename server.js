@@ -28,7 +28,7 @@ const { parsePhoneNumberFromString } = require('libphonenumber-js');
 const db = mysql.createConnection({
     host: process.env.DB_HOST || 'localhost',
     user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || 'z,fnzdnfyrtcrbk24',
+    password: process.env.DB_PASSWORD || '',
     database: process.env.DB_NAME || 'gecko_db'
 });
 
@@ -244,7 +244,7 @@ app.post('/upload', upload.array('image', 20), async (req, res) => {
             return res.status(400).send('Неверный формат номера телефона');
         }
 
-        
+
         // После цикла for
         if (fileIds.length === 0) {
             return res.status(500).send('Не удалось обработать ни один файл');
