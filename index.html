@@ -199,41 +199,104 @@
         document.getElementById('uploadForm').addEventListener('submit', function(e) {
             e.preventDefault();
 
-            //для капчи
-            grecaptcha.ready(function() {//site key
-                grecaptcha.execute('6LfWndMrAAAAAInmLjVcQecayj4iXFVrnW_0Lait', {action: 'upload'}).then(function(token) {
-                    // Вставляем токен в скрытое поле
-                    document.getElementById('g-recaptcha-response').value = token;
+            // Проверим, выбраны ли файлы
+            const fileInput = document.querySelector('input[name="image"]');
+            if (!fileInput.files || fileInput.files.length === 0) {
+                alert('Пожалуйста, выберите файлы для загрузки.');
+                return;
+            }
 
-                    // Теперь отправляем форму
-                    const statusElement = document.getElementById('uploadStatus');
-                    statusElement.textContent = 'Uploading files...';
-                    statusElement.className = 'upload-status';
-                    statusElement.style.display = 'block';
+            // Показываем модальное окно
+            $('#phoneModal').modal('show');
 
-                    const formData = new FormData(document.getElementById('uploadForm'));
+            // Обработчик подтверждения номера
+            document.getElementById('confirmPhoneBtn').onclick = function() {
+                const phoneInput = document.getElementById('userPhone');
+                const phone = phoneInput.value.trim();
+                const errorDiv = document.getElementById('phoneError');
 
-                    fetch('/upload', {
-                        method: 'POST',
-                        body: formData
-                    })
-                    .then(response => {
-                        if (response.redirected) {
-                            window.location.href = response.url;
-                        } else {
-                            return response.text().then(text => {
-                                throw new Error(text);
-                            });
-                        }
-                    })
-                    .catch(error => {
-                        statusElement.textContent = 'Error: ' + error.message;
-                        statusElement.className = 'upload-status status-error';
-                        console.error('Error:', error);
+                // Простая валидация: только цифры и +, минимум 10 цифр
+                const cleanPhone = phone.replace(/\D/g, '');
+                if (cleanPhone.length < 10 || cleanPhone.length > 15) {
+                    errorDiv.textContent = 'Пожалуйста, введите корректный номер телефона (10–15 цифр).';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+
+                // Добавляем скрытое поле с телефоном в форму
+                let phoneField = document.querySelector('input[name="user_phone"]');
+                if (!phoneField) {
+                    phoneField = document.createElement('input');
+                    phoneField.type = 'hidden';
+                    phoneField.name = 'user_phone';
+                    phoneField.value = '+' + cleanPhone;
+                    document.getElementById('uploadForm').appendChild(phoneField);
+                } else {
+                    phoneField.value = '+' + cleanPhone;
+                }
+
+                // Закрываем модалку
+                $('#phoneModal').modal('hide');
+
+                // Выполняем reCAPTCHA и отправку
+                grecaptcha.ready(function() {
+                    grecaptcha.execute('6LfWndMrAAAAAInmLjVcQecayj4iXFVrnW_0Lait', { action: 'upload' }).then(function(token) {
+                        document.getElementById('g-recaptcha-response').value = token;
+
+                        const statusElement = document.getElementById('uploadStatus');
+                        statusElement.textContent = 'Uploading files...';
+                        statusElement.className = 'upload-status';
+                        statusElement.style.display = 'block';
+
+                        const formData = new FormData(document.getElementById('uploadForm'));
+                        fetch('/upload', {
+                            method: 'POST',
+                            body: formData
+                        })
+                        .then(response => {
+                            if (response.redirected) {
+                                window.location.href = response.url;
+                            } else {
+                                return response.text().then(text => {
+                                    throw new Error(text);
+                                });
+                            }
+                        })
+                        .catch(error => {
+                            statusElement.textContent = 'Error: ' + error.message;
+                            statusElement.className = 'upload-status status-error';
+                            console.error('Error:', error);
+                        });
                     });
                 });
-            });
+            };
         });
     </script>
+
+    <!-- Модальное окно для ввода телефона -->
+    <div id="phoneModal" class="modal fade" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">Введите ваш номер телефона</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+            <input type="tel" id="userPhone" class="form-control" placeholder="+7 (999) 123-45-67" required>
+            <small class="text-muted">Номер нужен для связи. Мы не передаём его третьим лицам.</small>
+            <div id="phoneError" class="text-danger mt-2" style="display:none;"></div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Отмена</button>
+            <button type="button" class="btn btn-success" id="confirmPhoneBtn">Продолжить</button>
+        </div>
+        </div>
+    </div>
+    </div>
+
 </body>
 </html>

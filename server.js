@@ -19,6 +19,31 @@ const sharp = require('sharp');
 // Хранилище: fileId → groupFileId (если файл в группе)
 const fileToGroup = {};
 
+
+//###################################################
+//DataBase
+const mysql = require('mysql2');
+const { parsePhoneNumberFromString } = require('libphonenumber-js');
+// Подключение к MySQL
+const db = mysql.createConnection({
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || 'z,fnzdnfyrtcrbk24',
+    database: process.env.DB_NAME || 'gecko_db'
+});
+
+db.connect(err => {
+    if (err) {
+        console.error('❌ Ошибка подключения к MySQL:', err);
+    } else {
+        console.log('✅ Подключено к MySQL');
+    }
+});
+module.exports = db;
+//#####################################################
+
+
+
 // Создаем папку storage, если её нет
 if (!fs.existsSync('storage')) {
     fs.mkdirSync('storage');
@@ -76,15 +101,14 @@ app.post('/upload', upload.array('image', 20), async (req, res) => {
             return res.status(400).send('Файлы не выбраны');
         }
 
+        const fileIds = [];
+
         // ✅ Если файл всего один — игнорируем галочку "Make one post"
         const makeOnePost = req.files.length > 1 && !!req.body.make_one_post;
         const description = req.body.overview || '';
 
         // ✅ Если makeOnePost — используем ОДИН fileId для всей группы
         const groupFileId = makeOnePost ? uuidv4() : null;
-
-        // ✅ Массив для хранения всех fileId (или groupFileId)
-        const fileIds = [];
 
         // ✅ Обрабатываем каждый файл
         for (let i = 0; i < req.files.length; i++) {
@@ -142,7 +166,10 @@ app.post('/upload', upload.array('image', 20), async (req, res) => {
 
             // ✅ Если makeOnePost — используем groupFileId, иначе — fileId файла
             const finalFileId = makeOnePost ? groupFileId : fileId;
+            // ✅ Массив для хранения всех fileId (или groupFileId)
             fileIds.push(finalFileId);
+
+            
 
             // ✅ Сохраняем метаданные — но только один раз для группы
             // ✅ Сохраняем метаданные — один раз для группы, или для каждого файла
@@ -187,13 +214,113 @@ app.post('/upload', upload.array('image', 20), async (req, res) => {
             }
         }
 
+
+        if (fileIds.length === 0) {
+            return res.status(500).send('Не удалось обработать ни один файл');
+        }
+        const mainFileId = fileIds[0];
+
+        // ✅ Получаем IP
+        const clientIp = getClientIp(req);
+
+        // ✅ Защита от спама
+        if (!isUploadAllowed(clientIp)) {
+            return res.status(429).send(`Слишком много загрузок. Попробуйте через 5 минут.`);
+        }
+
+        // ✅ Валидация телефона через libphonenumber-js с указанием страны по умолчанию
+        const phoneRaw = req.body.user_phone;
+        if (!phoneRaw) {
+            return res.status(400).send('Телефон обязателен');
+        }
+
+        let phoneNormalized = null;
+        try {
+            // Указываем страну по умолчанию — например, 'RU' для России
+            const phoneNumber = parsePhoneNumberFromString(phoneRaw, 'RU');
+
+            if (phoneNumber && phoneNumber.isValid()) {
+                phoneNormalized = phoneNumber.format('E.164'); // например: +79091234567
+            } else {
+                return res.status(400).send('Неверный формат номера телефона');
+            }
+        } catch (err) {
+            return res.status(400).send('Неверный формат номера телефона');
+        }
+
+        // ✅ Сохраняем в БД
+        const sql = 'INSERT INTO uploads (file_id, phone, ip_address) VALUES (?, ?, ?)';
+        db.query(sql, [mainFileId, phoneNormalized, clientIp], (err) => {
+            if (err) {
+                console.error('⚠️ Ошибка сохранения в БД:', err);
+                // Можно логировать, но не прерывать загрузку
+            }
+        });
+
+
         // ✅ Редиректим на первый fileId (или groupFileId)
-        res.redirect(`/${fileIds[0]}`);
+        res.redirect(`/${mainFileId}`);
 
     } catch (error) {
         res.status(500).send('Ошибка загрузки файла: ' + error.message);
     }
 });
+
+function isUploadAllowed(ip) {
+    return new Promise((resolve, reject) => {
+        const oneHourAgo = new Date(Date.now() - 60 * 5 * 1000).toISOString().slice(0, 19).replace('T', ' ');
+
+        // Считаем количество загрузок за 5 минут
+        const countSql = `
+            SELECT COUNT(*) AS count 
+            FROM upload_logs 
+            WHERE ip_address = ? AND created_at > ?
+        `;
+        db.query(countSql, [ip, oneHourAgo], (err, results) => {
+            if (err) return reject(err);
+
+            const MAX_UPLOADS_PER_HOUR = 10;
+            const count = results[0].count;
+            if (count >= MAX_UPLOADS_PER_HOUR) {
+                return resolve(false);
+            }
+
+            // Логируем текущую попытку
+            const insertSql = 'INSERT INTO upload_logs (ip_address) VALUES (?)';
+            db.query(insertSql, [ip], (err) => {
+                if (err) console.error('Не удалось записать лог загрузки:', err);
+                resolve(true);
+            });
+        });
+    });
+}
+function getClientIp(req) {
+    // 1. X-Forwarded-For (если за прокси)
+    const forwarded = req.headers['x-forwarded-for'];
+    if (forwarded) {
+        const ips = Array.isArray(forwarded) ? forwarded : forwarded.split(',');
+        const ip = ips[0]?.trim();
+        if (ip && ip !== '127.0.0.1' && !ip.startsWith('::1')) {
+            return ip;
+        }
+    }
+
+    // 2. req.connection.remoteAddress или req.socket.remoteAddress
+    let ip = req.connection?.remoteAddress ||
+             req.socket?.remoteAddress ||
+             '0.0.0.0';
+
+    // 3. Убираем IPv6-обёртку для localhost
+    if (ip.startsWith('::ffff:')) {
+        ip = ip.substring(7); // остаётся IPv4, например: 127.0.0.1
+    } else if (ip === '::1') {
+        ip = '127.0.0.1';
+    }
+
+    return ip;
+}
+
+
 
 // Парсер для multipart/form-data без файлов
 const parseForm = multer().none();

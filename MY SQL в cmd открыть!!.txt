@@ -1,0 +1,17 @@
+cd C:\Program Files\MySQL\MySQL Server 8.0\bin\
+
+mysql -u root -p
+
+
+
+-- Посмотреть список баз
+SHOW DATABASES;
+
+-- Выбрать вашу базу
+USE gecko_db;
+
+-- Посмотреть таблицы
+SHOW TABLES;
+
+-- Посмотреть данные из таблицы uploads
+SELECT * FROM uploads;
