@@ -302,16 +302,16 @@ function getClientIp(req) {
     const forwarded = req.headers['x-forwarded-for'];
     if (forwarded) {
         const ips = Array.isArray(forwarded) ? forwarded : forwarded.split(',');
-        const ip = ips[0]?.trim();
+        const ip = ips && ips[0] ? ips[0].trim() : null;
         if (ip && ip !== '127.0.0.1' && !ip.startsWith('::1')) {
             return ip;
         }
     }
 
     // 2. req.connection.remoteAddress или req.socket.remoteAddress
-    let ip = req.connection?.remoteAddress ||
-             req.socket?.remoteAddress ||
-             '0.0.0.0';
+    let ip = (req.connection && req.connection.remoteAddress) ||
+         (req.socket && req.socket.remoteAddress) ||
+         '0.0.0.0';
 
     // 3. Убираем IPv6-обёртку для localhost
     if (ip.startsWith('::ffff:')) {
