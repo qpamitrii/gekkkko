@@ -42,6 +42,40 @@ const pool = new Pool({
         rejectUnauthorized: false
     }
 });*/
+// ✅ Создаём таблицы при старте, если их нет
+async function initDatabase() {
+    try {
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS uploads (
+                id SERIAL PRIMARY KEY,
+                file_id VARCHAR(255) NOT NULL UNIQUE,
+                phone VARCHAR(50) NOT NULL,
+                ip_address VARCHAR(45) NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        `);
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS upload_logs (
+                id SERIAL PRIMARY KEY,
+                ip_address VARCHAR(45) NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        `);
+        console.log('✅ Таблицы uploads и upload_logs готовы');
+    } catch (err) {
+        console.error('❌ Ошибка инициализации БД:', err);
+        process.exit(1);
+    }
+}
+
+// Запускаем инициализацию
+initDatabase().then(() => {
+    app.listen(PORT, () => {
+        console.log(`🚀 Server running on http://localhost:${PORT}`);
+    });
+}).catch(err => {
+    console.error('Не удалось запустить сервер:', err);
+});
 // Экспортируем pool для удобства
 module.exports = pool;
 //#####################################################
