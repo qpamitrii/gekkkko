@@ -68,13 +68,27 @@ async function initDatabase() {
     }
 }
 
-// Запускаем инициализацию
-initDatabase().then(() => {
-    app.listen(PORT, () => {
-        console.log(`🚀 Server running on http://localhost:${PORT}`);
-    });
-}).catch(err => {
-    console.error('Не удалось запустить сервер:', err);
+// --- Запуск сервера ---
+const server = app.listen(PORT, () => {
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
+});
+
+// Обработка ошибок сервера
+server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        console.error(`❌ Порт ${PORT} уже занят. Render использует переменную PORT.`);
+        process.exit(1);
+    } else {
+        console.error('❌ Неизвестная ошибка сервера:', err);
+        process.exit(1);
+    }
+});
+
+// Инициализируем БД после запуска сервера (или до — как удобнее)
+initDatabase().catch(err => {
+    console.error('Не удалось инициализировать БД:', err);
+    // Можно не завершать процесс, если хотите, чтобы сервер работал без БД
+    // process.exit(1);
 });
 // Экспортируем pool для удобства
 module.exports = pool;
@@ -1094,9 +1108,4 @@ app.use((error, req, res, next) => {
         }
     }
     res.status(500).send('Error: ' + error.message);
-});
-
-// Запуск сервера
-app.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
