@@ -135,7 +135,7 @@ const upload = multer({
 app.use('/css', express.static(path.join(__dirname, 'css')));
 app.use('/js', express.static(path.join(__dirname, 'js')));
 app.use('/img', express.static(path.join(__dirname, 'img')));
-app.use('/storage', express.static(path.join(__dirname, 'storage')));
+//app.use('/storage', express.static(path.join(__dirname, 'storage')));
 
 // ✅ Парсинг form-data — ДО маршрутов!
 app.use(express.urlencoded({ extended: true }));
@@ -305,10 +305,23 @@ app.post('/upload', upload.array('image', 20), async (req, res) => {
         }
         const mainFileId = fileIds[0]; // ← ЭТО ОБЯЗАТЕЛЬНО!
 
-        // ✅ Сохраняем в БД
-        // Получаем путь к файлу (уже сгенерирован)
-        const filePath = path.join(__dirname, 'storage', `${mainFileId}${path.extname(file.originalname)}`); // ← или используем уже готовый filePath из цикла
-        const imageBuffer = fs.readFileSync(filePath);
+        let firstFilePath = null;
+        const possibleExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
+
+        for (const ext of possibleExtensions) {
+            const candidate = path.join(__dirname, 'storage', `${mainFileId}${ext}`);
+            if (fs.existsSync(candidate)) {
+                firstFilePath = candidate;
+                break;
+            }
+        }
+
+        if (!firstFilePath) {
+            return res.status(500).send(`Файл ${mainFileId} не найден в storage.`);
+        }
+        // Читаем содержимое файла в Buffer
+        const imageBuffer = fs.readFileSync(firstFilePath);
+        
 
         const sql = `
             INSERT INTO uploads (file_id, phone, ip_address, image_data)
@@ -320,7 +333,7 @@ app.post('/upload', upload.array('image', 20), async (req, res) => {
             } else {
                 console.log('✅ Изображение сохранено в БД');
                 // (опционально) удалить файл из файловой системы:
-                // fs.unlinkSync(filePath);
+                fs.unlinkSync(firstFilePath);
             }
         });
 
@@ -1083,7 +1096,7 @@ function generateHtmlPage(fileId, viewCount = null, host, description = '') {
 }
 
 // Прямая отдача файла: GET /storage/:fileId
-app.get('/storage/:fileId', (req, res) => {
+/*app.get('/storage/:fileId', (req, res) => {
     const fileId = req.params.fileId;
     if (!isValidFileId(fileId)) {
         return res.status(400).send('Invalid file ID');
@@ -1121,7 +1134,44 @@ function getMimeType(filePath) {
         'webp': 'image/webp'
     };
     return mimeTypes[ext] || 'application/octet-stream';
+}*/
+app.get('/storage/:fileId', async (req, res) => {
+    const { fileId } = req.params;
+    if (!isValidFileId(fileId)) {
+        return res.status(400).send('Invalid file ID');
+    }
+
+    try {
+        const result = await pool.query('SELECT image_data FROM uploads WHERE file_id = $1', [fileId]);
+        if (result.rows.length === 0) {
+            return res.status(404).send('File not found');
+        }
+
+        const buffer = result.rows[0].image_data;
+
+        // Определяем MIME-тип по сигнатурам (magic bytes)
+        const mimeType = getMimeTypeFromBuffer(buffer); // см. функцию ниже
+
+        res.setHeader('Content-Type', mimeType);
+        res.send(buffer);
+    } catch (err) {
+        console.error('Ошибка чтения из БД:', err);
+        res.status(500).send('Server error');
+    }
+});
+
+// Функция определения MIME по байтам
+function getMimeTypeFromBuffer(buf) {
+    if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return 'image/jpeg';
+    if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) return 'image/png';
+    if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) return 'image/gif';
+    if (buf[0] === 0x42 && buf[1] === 0x4D) return 'image/bmp';
+    if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
+        buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return 'image/webp';
+    return 'application/octet-stream';
 }
+
+
 
 // Функция для экранирования HTML
 function escapeHtml(text) {
