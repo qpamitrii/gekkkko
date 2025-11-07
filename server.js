@@ -690,7 +690,8 @@ app.get('/:fileId', checkPassword, (req, res) => {
         const pageUrl = `${host}/${fileId}`;
         const viewUrl = `${host}/i/${fileId}`;
         const fileExt = path.extname(filePath);
-        const directUrlWithExt = `${host}/storage/${fileId}${fileExt}`;
+        //const directUrlWithExt = `${host}/storage/${fileId}${fileExt}`;
+        const directUrl = `${host}/storage/${fileId}`;
 
         const description = descriptions[fileId] || '';
         let viewsInfo = ''; // ❌ Views не отображаем
@@ -725,7 +726,7 @@ app.get('/:fileId', checkPassword, (req, res) => {
                 <div class="row">
                     <div class="col-sm-8 col-sm-offset-2">
                         <a target="_blank" href="${viewUrl}">
-                            <img style="margin-bottom: 20px; max-width: 100%" src="${directUrlWithExt}">
+                            <img style="margin-bottom: 20px; max-width: 100%" src="${directUrl}">
                         </a>
                     </div>
                 </div>
@@ -817,7 +818,8 @@ app.get('/:fileId', checkPassword, (req, res) => {
 
         const viewUrl = `${host}/i/${fId}`;
         const fileExt = path.extname(filePath);
-        const directUrl = `${host}/storage/${fId}${fileExt}`;
+        //const directUrl = `${host}/storage/${fId}${fileExt}`;
+        const directUrl = `${host}/storage/${fId}`;
 
         imagesHtml += `
             <div class="col-sm-6 col-md-4" style="margin-bottom: 20px;">
@@ -1007,7 +1009,8 @@ function generateHtmlPage(fileId, viewCount = null, host, description = '') {
         }
     }
 
-    const directUrlWithExt = `${host}/storage/${fileId}${fileExt}`;
+    //const directUrlWithExt = `${host}/storage/${fileId}${fileExt}`;
+    const directUrl = `${host}/storage/${fileId}`; // ← Без расширения!
 
     // ✅ Генерируем информацию о просмотрах — только если viewCount передан (т.е. файл одиночный)
     let viewsInfo = '';
@@ -1043,7 +1046,7 @@ function generateHtmlPage(fileId, viewCount = null, host, description = '') {
                 <div class="wrapper">
                     <div class="row">
                         <div class="text-center col-sm-8 col-sm-offset-2">
-                            <img style="margin-bottom: 20px; max-width: 100%;" src="${directUrlWithExt}">
+                            <img style="margin-bottom: 20px; max-width: 100%;" src="${directUrl}">
                         </div>
                     </div>
 
