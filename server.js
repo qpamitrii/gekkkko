@@ -32,6 +32,7 @@ const pool = new Pool({
         rejectUnauthorized: false // Для Render
     }
 });
+delete process.env.DATABASE_URL; // ← чтобы не засветить в логах
 /*const pool = new Pool({
     host: process.env.DB_HOST,
     port: process.env.DB_PORT || 5432,
@@ -272,7 +273,8 @@ app.post('/upload', upload.array('image', 20), async (req, res) => {
         const clientIp = getClientIp(req);
 
         // ✅ Защита от спама
-        if (!isUploadAllowed(clientIp)) {
+        const isAllowed = await isUploadAllowed(clientIp);
+        if (!isAllowed) {
             return res.status(429).send(`Слишком много загрузок. Попробуйте через 5 минут.`);
         }
 
@@ -320,34 +322,32 @@ app.post('/upload', upload.array('image', 20), async (req, res) => {
     }
 });
 
-function isUploadAllowed(ip) {
-    return new Promise((resolve, reject) => {
-        const oneHourAgo = new Date(Date.now() - 60 * 5 * 1000).toISOString();
+async function isUploadAllowed(ip) {
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
 
-        // Считаем количество загрузок за 5 минут (PostgreSQL)
-        const countSql = `
-            SELECT COUNT(*) AS count 
-            FROM upload_logs 
-            WHERE ip_address = $1 AND created_at > $2
-        `;
-        pool.query(countSql, [ip, oneHourAgo], (err, results) => {
-            if (err) return reject(err);
+    try {
+        const countRes = await pool.query(
+            `SELECT COUNT(*) AS count FROM upload_logs WHERE ip_address = $1 AND created_at > $2`,
+            [ip, fiveMinutesAgo]
+        );
+        const count = parseInt(countRes.rows[0].count);
+        const MAX_UPLOADS = 10;
 
-            const MAX_UPLOADS_PER_HOUR = 10;
-            const count = parseInt(results.rows[0].count);
-            if (count >= MAX_UPLOADS_PER_HOUR) {
-                return resolve(false);
-            }
+        if (count >= MAX_UPLOADS) {
+            return false;
+        }
 
-            // Логируем текущую попытку
-            const insertSql = 'INSERT INTO upload_logs (ip_address) VALUES ($1)';
-            pool.query(insertSql, [ip], (err) => {
-                if (err) console.error('Не удалось записать лог загрузки:', err);
-                resolve(true);
-            });
-        });
-    });
+        await pool.query(
+            'INSERT INTO upload_logs (ip_address) VALUES ($1)',
+            [ip]
+        );
+        return true;
+    } catch (err) {
+        console.error('Ошибка проверки спама:', err);
+        return false; // или false — в зависимости от политики
+    }
 }
+
 function getClientIp(req) {
     // 1. X-Forwarded-For (если за прокси)
     const forwarded = req.headers['x-forwarded-for'];
@@ -379,9 +379,19 @@ function getClientIp(req) {
 // Парсер для multipart/form-data без файлов
 const parseForm = multer().none();
 
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isValidFileId(id) {
+    return typeof id === 'string' && uuidRegex.test(id);
+}
+
 // Маршрут для проверки пароля
 app.post('/checkpass', parseForm, (req, res) => {
     const fileId = req.body.fileId;
+    if (!isValidFileId(fileId)) {
+        return res.status(400).send('Invalid fileId');
+    }
+
     const submittedPassword = req.body.password;
     const returnUrl = req.body.returnUrl || `/${fileId}`;
 
@@ -393,7 +403,13 @@ app.post('/checkpass', parseForm, (req, res) => {
 
     if (submittedPassword === correctPassword) {
         // Пароль верный — ставим куку и редиректим
-        res.cookie(`pw_${fileId}`, 'true', { maxAge: 3600000, httpOnly: true });
+        const isProd = process.env.NODE_ENV === 'production';
+        res.cookie(`pw_${fileId}`, 'true', {
+            maxAge: 3600000,
+            httpOnly: true,
+            secure: isProd,
+            sameSite: isProd ? 'Strict' : 'Lax'
+        });
         return res.redirect(returnUrl);
     }
 
@@ -624,6 +640,10 @@ app.post('/i/:fileId', checkPassword, (req, res) => {
 // Страница после загрузки: GET /:fileId
 app.get('/:fileId', checkPassword, (req, res) => {
     const fileId = req.params.fileId;
+    if (!isValidFileId(fileId)) {
+        return res.status(400).send('Invalid file ID');
+    }
+
     const possibleExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
 
     // ✅ Сначала проверим, есть ли этот fileId в описаниях — если нет, возможно, это не группа
@@ -886,6 +906,10 @@ app.get('/:fileId', checkPassword, (req, res) => {
 // Страница просмотра изображения: GET /i/:fileId
 app.get('/i/:fileId', checkPassword, (req, res) => {
     const fileId = req.params.fileId;
+    if (!isValidFileId(fileId)) {
+        return res.status(400).send('Invalid file ID');
+    }
+
     const possibleExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
     let filePath = null;
 
@@ -1050,6 +1074,10 @@ function generateHtmlPage(fileId, viewCount = null, host, description = '') {
 // Прямая отдача файла: GET /storage/:fileId
 app.get('/storage/:fileId', (req, res) => {
     const fileId = req.params.fileId;
+    if (!isValidFileId(fileId)) {
+        return res.status(400).send('Invalid file ID');
+    }
+
     const possibleExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
     let filePath = null;
 
@@ -1067,10 +1095,6 @@ app.get('/storage/:fileId', (req, res) => {
 
     const mimeType = getMimeType(filePath);
     res.setHeader('Content-Type', mimeType);
-
-    res.setHeader('Content-Type', mimeType);
-    res.sendFile(filePath);
-
     res.sendFile(filePath);
 });
 
@@ -1101,11 +1125,16 @@ function escapeHtml(text) {
 }
 
 // Обработка ошибок Multer
-app.use((error, req, res, next) => {
-    if (error instanceof multer.MulterError) {
-        if (error.code === 'LIMIT_FILE_SIZE') {
-            return res.status(400).send('File too large (max 10MB)');
-        }
-    }
-    res.status(500).send('Error: ' + error.message);
+app.use((req, res, next) => {
+    res.setHeader(
+        'Content-Security-Policy',
+        "default-src 'self'; " +
+        "script-src 'self' 'unsafe-inline'; " + // ← 'unsafe-inline' нужен из-за <script> в HTML, но лучше убрать и вынести скрипты
+        "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; " +
+        "img-src 'self' data:; " +
+        "font-src 'self' https://cdnjs.cloudflare.com; " +
+        "frame-ancestors 'none'; " +
+        "object-src 'none';"
+    );
+    next();
 });
