@@ -142,6 +142,43 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use(cookieParser()); // ← ✅ для req.cookies
 
+
+app.get('/storage/:fileId', async (req, res) => {
+    const { fileId } = req.params;
+    if (!isValidFileId(fileId)) {
+        return res.status(400).send('Invalid file ID');
+    }
+
+    try {
+        const result = await pool.query('SELECT image_data FROM uploads WHERE file_id = $1', [fileId]);
+        if (result.rows.length === 0) {
+            return res.status(404).send('File not found');
+        }
+
+        const buffer = result.rows[0].image_data;
+
+        // Определяем MIME-тип по сигнатурам (magic bytes)
+        const mimeType = getMimeTypeFromBuffer(buffer); // см. функцию ниже
+
+        res.setHeader('Content-Type', mimeType);
+        res.send(buffer);
+    } catch (err) {
+        console.error('Ошибка чтения из БД:', err);
+        res.status(500).send('Server error');
+    }
+});
+
+// Функция определения MIME по байтам
+function getMimeTypeFromBuffer(buf) {
+    if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return 'image/jpeg';
+    if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) return 'image/png';
+    if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) return 'image/gif';
+    if (buf[0] === 0x42 && buf[1] === 0x4D) return 'image/bmp';
+    if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
+        buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return 'image/webp';
+    return 'application/octet-stream';
+}
+
 // Главная страница
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
@@ -1138,41 +1175,7 @@ function getMimeType(filePath) {
     };
     return mimeTypes[ext] || 'application/octet-stream';
 }*/
-app.get('/storage/:fileId', async (req, res) => {
-    const { fileId } = req.params;
-    if (!isValidFileId(fileId)) {
-        return res.status(400).send('Invalid file ID');
-    }
 
-    try {
-        const result = await pool.query('SELECT image_data FROM uploads WHERE file_id = $1', [fileId]);
-        if (result.rows.length === 0) {
-            return res.status(404).send('File not found');
-        }
-
-        const buffer = result.rows[0].image_data;
-
-        // Определяем MIME-тип по сигнатурам (magic bytes)
-        const mimeType = getMimeTypeFromBuffer(buffer); // см. функцию ниже
-
-        res.setHeader('Content-Type', mimeType);
-        res.send(buffer);
-    } catch (err) {
-        console.error('Ошибка чтения из БД:', err);
-        res.status(500).send('Server error');
-    }
-});
-
-// Функция определения MIME по байтам
-function getMimeTypeFromBuffer(buf) {
-    if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return 'image/jpeg';
-    if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) return 'image/png';
-    if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) return 'image/gif';
-    if (buf[0] === 0x42 && buf[1] === 0x4D) return 'image/bmp';
-    if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
-        buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return 'image/webp';
-    return 'application/octet-stream';
-}
 
 
 
