@@ -135,49 +135,12 @@ const upload = multer({
 app.use('/css', express.static(path.join(__dirname, 'css')));
 app.use('/js', express.static(path.join(__dirname, 'js')));
 app.use('/img', express.static(path.join(__dirname, 'img')));
-//app.use('/storage', express.static(path.join(__dirname, 'storage')));
+app.use('/storage', express.static(path.join(__dirname, 'storage')));
 
 // ✅ Парсинг form-data — ДО маршрутов!
 app.use(express.urlencoded({ extended: true }));
 
 app.use(cookieParser()); // ← ✅ для req.cookies
-
-
-app.get('/storage/:fileId', async (req, res) => {
-    const { fileId } = req.params;
-    if (!isValidFileId(fileId)) {
-        return res.status(400).send('Invalid file ID');
-    }
-
-    try {
-        const result = await pool.query('SELECT image_data FROM uploads WHERE file_id = $1', [fileId]);
-        if (result.rows.length === 0) {
-            return res.status(404).send('File not found');
-        }
-
-        const buffer = result.rows[0].image_data;
-
-        // Определяем MIME-тип по сигнатурам (magic bytes)
-        const mimeType = getMimeTypeFromBuffer(buffer); // см. функцию ниже
-
-        res.setHeader('Content-Type', mimeType);
-        res.send(buffer);
-    } catch (err) {
-        console.error('Ошибка чтения из БД:', err);
-        res.status(500).send('Server error');
-    }
-});
-
-// Функция определения MIME по байтам
-function getMimeTypeFromBuffer(buf) {
-    if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return 'image/jpeg';
-    if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) return 'image/png';
-    if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) return 'image/gif';
-    if (buf[0] === 0x42 && buf[1] === 0x4D) return 'image/bmp';
-    if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
-        buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return 'image/webp';
-    return 'application/octet-stream';
-}
 
 // Главная страница
 app.get('/', (req, res) => {
@@ -370,7 +333,7 @@ app.post('/upload', upload.array('image', 20), async (req, res) => {
             } else {
                 console.log('✅ Изображение сохранено в БД');
                 // (опционально) удалить файл из файловой системы:
-                fs.unlinkSync(firstFilePath);
+                //fs.unlinkSync(firstFilePath);
             }
         });
 
@@ -727,8 +690,8 @@ app.get('/:fileId', checkPassword, (req, res) => {
         const pageUrl = `${host}/${fileId}`;
         const viewUrl = `${host}/i/${fileId}`;
         const fileExt = path.extname(filePath);
-        //const directUrlWithExt = `${host}/storage/${fileId}${fileExt}`;
-        const directUrl = `${host}/storage/${fileId}`;
+        const directUrlWithExt = `${host}/storage/${fileId}${fileExt}`;
+        //const directUrl = `${host}/storage/${fileId}`;
 
         const description = descriptions[fileId] || '';
         let viewsInfo = ''; // ❌ Views не отображаем
@@ -763,7 +726,7 @@ app.get('/:fileId', checkPassword, (req, res) => {
                 <div class="row">
                     <div class="col-sm-8 col-sm-offset-2">
                         <a target="_blank" href="${viewUrl}">
-                            <img style="margin-bottom: 20px; max-width: 100%" src="${directUrl}">
+                            <img style="margin-bottom: 20px; max-width: 100%" src="${directUrlWithExt}">
                         </a>
                     </div>
                 </div>
@@ -855,13 +818,13 @@ app.get('/:fileId', checkPassword, (req, res) => {
 
         const viewUrl = `${host}/i/${fId}`;
         const fileExt = path.extname(filePath);
-        //const directUrl = `${host}/storage/${fId}${fileExt}`;
-        const directUrl = `${host}/storage/${fId}`;
+        const directUrlWithExt = `${host}/storage/${fId}${fileExt}`;
+        //const directUrl = `${host}/storage/${fId}`;
 
         imagesHtml += `
             <div class="col-sm-6 col-md-4" style="margin-bottom: 20px;">
                 <a target="_blank" href="${viewUrl}">
-                    <img style="max-width: 100%; height: auto;" src="${directUrl}">
+                    <img style="max-width: 100%; height: auto;" src="${directUrlWithExt}">
                 </a>
             </div>
         `;
@@ -1046,8 +1009,8 @@ function generateHtmlPage(fileId, viewCount = null, host, description = '') {
         }
     }
 
-    //const directUrlWithExt = `${host}/storage/${fileId}${fileExt}`;
-    const directUrl = `${host}/storage/${fileId}`; // ← Без расширения!
+    const directUrlWithExt = `${host}/storage/${fileId}${fileExt}`;
+    //const directUrl = `${host}/storage/${fileId}`; // ← Без расширения!
 
     // ✅ Генерируем информацию о просмотрах — только если viewCount передан (т.е. файл одиночный)
     let viewsInfo = '';
@@ -1083,7 +1046,7 @@ function generateHtmlPage(fileId, viewCount = null, host, description = '') {
                 <div class="wrapper">
                     <div class="row">
                         <div class="text-center col-sm-8 col-sm-offset-2">
-                            <img style="margin-bottom: 20px; max-width: 100%;" src="${directUrl}">
+                            <img style="margin-bottom: 20px; max-width: 100%;" src="${directUrlWithExt}">
                         </div>
                     </div>
 
@@ -1136,7 +1099,7 @@ function generateHtmlPage(fileId, viewCount = null, host, description = '') {
 }
 
 // Прямая отдача файла: GET /storage/:fileId
-/*app.get('/storage/:fileId', (req, res) => {
+app.get('/storage/:fileId', (req, res) => {
     const fileId = req.params.fileId;
     if (!isValidFileId(fileId)) {
         return res.status(400).send('Invalid file ID');
@@ -1174,8 +1137,43 @@ function getMimeType(filePath) {
         'webp': 'image/webp'
     };
     return mimeTypes[ext] || 'application/octet-stream';
-}*/
+}
+//из бд
+/*app.get('/storage/:fileId', async (req, res) => {
+    const { fileId } = req.params;
+    if (!isValidFileId(fileId)) {
+        return res.status(400).send('Invalid file ID');
+    }
 
+    try {
+        const result = await pool.query('SELECT image_data FROM uploads WHERE file_id = $1', [fileId]);
+        if (result.rows.length === 0) {
+            return res.status(404).send('File not found');
+        }
+
+        const buffer = result.rows[0].image_data;
+
+        // Определяем MIME-тип по сигнатурам (magic bytes)
+        const mimeType = getMimeTypeFromBuffer(buffer); // см. функцию ниже
+
+        res.setHeader('Content-Type', mimeType);
+        res.send(buffer);
+    } catch (err) {
+        console.error('Ошибка чтения из БД:', err);
+        res.status(500).send('Server error');
+    }
+});
+
+// Функция определения MIME по байтам
+function getMimeTypeFromBuffer(buf) {
+    if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return 'image/jpeg';
+    if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) return 'image/png';
+    if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) return 'image/gif';
+    if (buf[0] === 0x42 && buf[1] === 0x4D) return 'image/bmp';
+    if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
+        buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return 'image/webp';
+    return 'application/octet-stream';
+}*/
 
 
 
