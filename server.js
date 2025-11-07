@@ -306,10 +306,21 @@ app.post('/upload', upload.array('image', 20), async (req, res) => {
         const mainFileId = fileIds[0]; // ← ЭТО ОБЯЗАТЕЛЬНО!
 
         // ✅ Сохраняем в БД
-        const sql = 'INSERT INTO uploads (file_id, phone, ip_address) VALUES ($1, $2, $3)';
-        pool.query(sql, [mainFileId, phoneNormalized, clientIp], (err, res) => {
+        // Получаем путь к файлу (уже сгенерирован)
+        const filePath = path.join(__dirname, 'storage', `${mainFileId}${path.extname(file.originalname)}`); // ← или используем уже готовый filePath из цикла
+        const imageBuffer = fs.readFileSync(filePath);
+
+        const sql = `
+            INSERT INTO uploads (file_id, phone, ip_address, image_data)
+            VALUES ($1, $2, $3, $4)
+        `;
+        pool.query(sql, [mainFileId, phoneNormalized, clientIp, imageBuffer], (err, res) => {
             if (err) {
                 console.error('⚠️ Ошибка сохранения в БД:', err);
+            } else {
+                console.log('✅ Изображение сохранено в БД');
+                // (опционально) удалить файл из файловой системы:
+                // fs.unlinkSync(filePath);
             }
         });
 
