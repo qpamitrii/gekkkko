@@ -1,0 +1,3 @@
+dpg-d428rfre5dus73bhco30-a.oregon-postgres.render.com
+
+- в имя хоста

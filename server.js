@@ -19,27 +19,31 @@ const sharp = require('sharp');
 // Хранилище: fileId → groupFileId (если файл в группе)
 const fileToGroup = {};
 
-
-//###################################################
-//DataBase
-const mysql = require('mysql2');
 const { parsePhoneNumberFromString } = require('libphonenumber-js');
-// Подключение к MySQL
-const db = mysql.createConnection({
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || 'z,fnzdnfyrtcrbk24',
-    database: process.env.DB_NAME || 'gecko_db'
-});
 
-db.connect(err => {
-    if (err) {
-        console.error('❌ Ошибка подключения к MySQL:', err);
-    } else {
-        console.log('✅ Подключено к MySQL');
+// ###################################################
+// DataBase - PostgreSQL
+const { Pool } = require('pg');
+
+// Создаем пул подключений
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL, // ← Используем переменную окружения
+    ssl: {
+        rejectUnauthorized: false // Для Render
     }
 });
-module.exports = db;
+/*const pool = new Pool({
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT || 5432,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    ssl: {
+        rejectUnauthorized: false
+    }
+});*/
+// Экспортируем pool для удобства
+module.exports = pool;
 //#####################################################
 
 
@@ -215,10 +219,6 @@ app.post('/upload', upload.array('image', 20), async (req, res) => {
         }
 
 
-        if (fileIds.length === 0) {
-            return res.status(500).send('Не удалось обработать ни один файл');
-        }
-        const mainFileId = fileIds[0];
 
         // ✅ Получаем IP
         const clientIp = getClientIp(req);
@@ -248,12 +248,18 @@ app.post('/upload', upload.array('image', 20), async (req, res) => {
             return res.status(400).send('Неверный формат номера телефона');
         }
 
+
+        // После цикла for
+        if (fileIds.length === 0) {
+            return res.status(500).send('Не удалось обработать ни один файл');
+        }
+        const mainFileId = fileIds[0]; // ← ЭТО ОБЯЗАТЕЛЬНО!
+
         // ✅ Сохраняем в БД
-        const sql = 'INSERT INTO uploads (file_id, phone, ip_address) VALUES (?, ?, ?)';
-        db.query(sql, [mainFileId, phoneNormalized, clientIp], (err) => {
+        const sql = 'INSERT INTO uploads (file_id, phone, ip_address) VALUES ($1, $2, $3)';
+        pool.query(sql, [mainFileId, phoneNormalized, clientIp], (err, res) => {
             if (err) {
                 console.error('⚠️ Ошибка сохранения в БД:', err);
-                // Можно логировать, но не прерывать загрузку
             }
         });
 
@@ -268,26 +274,26 @@ app.post('/upload', upload.array('image', 20), async (req, res) => {
 
 function isUploadAllowed(ip) {
     return new Promise((resolve, reject) => {
-        const oneHourAgo = new Date(Date.now() - 60 * 5 * 1000).toISOString().slice(0, 19).replace('T', ' ');
+        const oneHourAgo = new Date(Date.now() - 60 * 5 * 1000).toISOString();
 
-        // Считаем количество загрузок за 5 минут
+        // Считаем количество загрузок за 5 минут (PostgreSQL)
         const countSql = `
             SELECT COUNT(*) AS count 
             FROM upload_logs 
-            WHERE ip_address = ? AND created_at > ?
+            WHERE ip_address = $1 AND created_at > $2
         `;
-        db.query(countSql, [ip, oneHourAgo], (err, results) => {
+        pool.query(countSql, [ip, oneHourAgo], (err, results) => {
             if (err) return reject(err);
 
             const MAX_UPLOADS_PER_HOUR = 10;
-            const count = results[0].count;
+            const count = parseInt(results.rows[0].count);
             if (count >= MAX_UPLOADS_PER_HOUR) {
                 return resolve(false);
             }
 
             // Логируем текущую попытку
-            const insertSql = 'INSERT INTO upload_logs (ip_address) VALUES (?)';
-            db.query(insertSql, [ip], (err) => {
+            const insertSql = 'INSERT INTO upload_logs (ip_address) VALUES ($1)';
+            pool.query(insertSql, [ip], (err) => {
                 if (err) console.error('Не удалось записать лог загрузки:', err);
                 resolve(true);
             });
@@ -299,16 +305,16 @@ function getClientIp(req) {
     const forwarded = req.headers['x-forwarded-for'];
     if (forwarded) {
         const ips = Array.isArray(forwarded) ? forwarded : forwarded.split(',');
-        const ip = ips[0]?.trim();
+        const ip = ips && ips[0] ? ips[0].trim() : null;
         if (ip && ip !== '127.0.0.1' && !ip.startsWith('::1')) {
             return ip;
         }
     }
 
     // 2. req.connection.remoteAddress или req.socket.remoteAddress
-    let ip = req.connection?.remoteAddress ||
-             req.socket?.remoteAddress ||
-             '0.0.0.0';
+    let ip = (req.connection && req.connection.remoteAddress) ||
+         (req.socket && req.socket.remoteAddress) ||
+         '0.0.0.0';
 
     // 3. Убираем IPv6-обёртку для localhost
     if (ip.startsWith('::ffff:')) {
