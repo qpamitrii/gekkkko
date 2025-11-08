@@ -50,44 +50,49 @@ delete process.env.DATABASE_URL; // ← чтобы не засветить в л
     }
 });*/
 // Запуск сервера — ТОЛЬКО ПОСЛЕ успешной инициализации БД
-initDatabase()
-    .then(() => {
-        const server = app.listen(PORT, () => {
-            console.log(`🚀 Server running on http://localhost:${PORT}`);
-        });
-        server.on('error', (err) => {
-            if (err.code === 'EADDRINUSE') {
-                console.error(`❌ Порт ${PORT} уже занят.`);
-                process.exit(1);
-            } else {
-                console.error('❌ Неизвестная ошибка сервера:', err);
-                process.exit(1);
-            }
-        });
-    })
-    .catch(err => {
-        console.error('❌ Не удалось инициализировать БД:', err);
-        process.exit(1); // ← завершаем процесс, если БД не готова
-    });
-
-
-// Обработка ошибок сервера
-server.on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-        console.error(`❌ Порт ${PORT} уже занят. Render использует переменную PORT.`);
-        process.exit(1);
-    } else {
-        console.error('❌ Неизвестная ошибка сервера:', err);
-        process.exit(1);
+async function initDatabase() {
+    try {
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS uploads (
+                id SERIAL PRIMARY KEY,
+                upload_id VARCHAR(36) NOT NULL UNIQUE,  -- ← исправлено: upload_id, не file_id
+                phone VARCHAR(50) NOT NULL,
+                ip_address VARCHAR(45) NOT NULL,
+                description TEXT,
+                password VARCHAR(255),
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        `);
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS images (
+                id SERIAL PRIMARY KEY,
+                image_id VARCHAR(36) NOT NULL UNIQUE,
+                upload_id VARCHAR(36) NOT NULL,
+                view_limit INTEGER DEFAULT 0,
+                view_current INTEGER DEFAULT 0,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                FOREIGN KEY (upload_id) REFERENCES uploads(upload_id) ON DELETE CASCADE
+            );
+        `);
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS upload_logs (
+                id SERIAL PRIMARY KEY,
+                ip_address VARCHAR(45) NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        `);
+        console.log('✅ Таблицы uploads, images и upload_logs готовы');
+    } catch (err) {
+        console.error('❌ Ошибка инициализации БД:', err);
+        throw err; // ← важно: пробрасываем, чтобы .catch сработал
     }
-});
+}
 
-// Инициализируем БД после запуска сервера (или до — как удобнее)
-initDatabase().catch(err => {
-    console.error('Не удалось инициализировать БД:', err);
-    // Можно не завершать процесс, если хотите, чтобы сервер работал без БД
-    // process.exit(1);
-});
+
+initDatabase();
+
+
+
 // Экспортируем pool для удобства
 module.exports = pool;
 //#####################################################
