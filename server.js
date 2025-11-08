@@ -21,6 +21,20 @@ const fileToGroup = {};
 
 const { parsePhoneNumberFromString } = require('libphonenumber-js');
 
+const csrfToken = crypto.randomBytes(32).toString('hex');
+res.cookie('XSRF-TOKEN', csrfToken, { httpOnly: false, sameSite: 'strict', secure: true });
+const secret = '6LfWndMrAAAAAInmLjVcQecayj4iXFVrnW_0Lait'; // из Google Cloud Console
+const response = req.body['g-recaptcha-response'];
+const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${secret}&response=${response}`;
+
+const res = await fetch(verifyUrl, { method: 'POST' });
+const data = await res.json();
+
+if (!data.success || data.score < 0.5) { // порог настраивается
+  return res.status(400).send('reCAPTCHA failed');
+}
+
+
 // ###################################################
 // DataBase - PostgreSQL
 const { Pool } = require('pg');
@@ -304,6 +318,7 @@ app.post('/upload', upload.array('image', 20), async (req, res) => {
             return res.status(500).send('Не удалось обработать ни один файл');
         }
         const mainFileId = fileIds[0]; // ← ЭТО ОБЯЗАТЕЛЬНО!
+        const uploadId = makeOnePost ? groupFileId : mainFileId;
 
         let firstFilePath = null;
         const possibleExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
@@ -320,26 +335,61 @@ app.post('/upload', upload.array('image', 20), async (req, res) => {
             return res.status(500).send(`Файл ${mainFileId} не найден в storage.`);
         }
         // Читаем содержимое файла в Buffer
-        const imageBuffer = fs.readFileSync(firstFilePath);
-        
+        //const imageBuffer = fs.readFileSync(firstFilePath);
 
-        const sql = `
-            INSERT INTO uploads (file_id, phone, ip_address, image_data)
-            VALUES ($1, $2, $3, $4)
+        // ✅ Формируем полную ссылку на изображение
+        const host = `${req.protocol}://${req.get('host')}`;
+        //const uploadId = `${host}/storage/${mainFileId}${fileExt}`;
+
+        // ✅ Получаем пароль из описаний (если он есть)
+        //const password = passwords[mainFileId] || null; // Используйте null, если пароля нет
+
+        // ✅ Сохраняем в БД: сначала запись в uploads
+        const uploadSql = `
+            INSERT INTO uploads (upload_id, phone, ip_address, description, password)
+            VALUES ($1, $2, $3, $4, $5)
         `;
-        pool.query(sql, [mainFileId, phoneNormalized, clientIp, imageBuffer], (err, res) => {
-            if (err) {
-                console.error('⚠️ Ошибка сохранения в БД:', err);
-            } else {
-                console.log('✅ Изображение сохранено в БД');
-                // (опционально) удалить файл из файловой системы:
-                //fs.unlinkSync(firstFilePath);
+        await pool.query(uploadSql, [
+            uploadId,
+            phoneNormalized,
+            clientIp,
+            description,
+            passwords[uploadId] || null // Пароль из descriptions[uploadId] или null
+        ]);
+
+        // ✅ Затем сохраняем каждое изображение в images
+        for (let i = 0; i < fileIds.length; i++) {
+            const fileId = fileIds[i];
+            let filePath = null;
+            const possibleExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
+            for (const ext of possibleExtensions) {
+                const candidate = path.join(__dirname, 'storage', `${fileId}${ext}`);
+                if (fs.existsSync(candidate)) {
+                    filePath = candidate;
+                    break;
+                }
             }
-        });
+            if (!filePath) {
+                console.error(`Файл ${fileId} не найден в storage.`);
+                continue; // Пропускаем, но можно и остановить — по желанию
+            }
+
+            // Читаем содержимое файла в Buffer
+            const imageBuffer = fs.readFileSync(filePath);
+
+            // Получаем лимит просмотров (только для одиночных файлов)
+            const viewLimit = !makeOnePost && viewCounts[fileId] ? viewCounts[fileId].limit : 0;
+
+            const imageSql = `
+                INSERT INTO images (image_id, upload_id, image_data, view_limit, view_current)
+                VALUES ($1, $2, $3, $4, $5)
+            `;
+            await pool.query(imageSql, [fileId, uploadId, imageBuffer, viewLimit, 0]);
+        }
 
 
         // ✅ Редиректим на первый fileId (или groupFileId)
-        res.redirect(`/${mainFileId}`);
+        res.redirect(`/${uploadId}`);
 
     } catch (error) {
         res.status(500).send('Ошибка загрузки файла: ' + error.message);
@@ -928,7 +978,6 @@ app.get('/:fileId', checkPassword, (req, res) => {
     res.send(html);
 });
 
-// Страница просмотра изображения: GET /i/:fileId
 // Страница просмотра изображения: GET /i/:fileId
 app.get('/i/:fileId', checkPassword, (req, res) => {
     const fileId = req.params.fileId;
