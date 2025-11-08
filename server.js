@@ -172,13 +172,13 @@ app.get('/', (req, res) => {
 
 // Загрузка файла (без капчи)
 app.post('/upload', upload.array('image', 20), async (req, res) => {
-    const secret = '6LfWndMrAAAAAInmLjVcQecayj4iXFVrnW_0Lait';
+    const secret = '6LcNXgYsAAAAAIpkzbh4nsmwmC9CPxwlJYEZ3Q8z';
     const clientResponse = req.body['g-recaptcha-response'];
     if (!clientResponse) {
         return res.status(400).send('reCAPTCHA required');
     }
 
-    try {
+    /*try {
         const verifyRes = await axios.post('https://www.google.com/recaptcha/api/siteverify', null, {
             params: {
                 secret,
@@ -192,7 +192,7 @@ app.post('/upload', upload.array('image', 20), async (req, res) => {
     } catch (err) {
         console.error('reCAPTCHA verify error:', err);
         return res.status(500).send('reCAPTCHA verification error');
-    }
+    }*/
 
     
     try {
