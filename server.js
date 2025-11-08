@@ -24,8 +24,7 @@ const fileToGroup = {};
 
 const { parsePhoneNumberFromString } = require('libphonenumber-js');
 
-const csrfToken = crypto.randomBytes(32).toString('hex');
-res.cookie('XSRF-TOKEN', csrfToken, { httpOnly: false, sameSite: 'strict', secure: true });
+
 
 
 // ###################################################
@@ -142,6 +141,12 @@ app.use(cookieParser()); // ← ✅ для req.cookies
 
 // Главная страница
 app.get('/', (req, res) => {
+    const csrfToken = crypto.randomBytes(32).toString('hex');
+    res.cookie('XSRF-TOKEN', csrfToken, {
+        httpOnly: false,     // ← false, чтобы можно было прочитать в JS на фронтенде
+        sameSite: 'strict',
+        secure: process.env.NODE_ENV === 'production'
+    });
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
