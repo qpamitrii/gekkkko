@@ -26,16 +26,6 @@ const { parsePhoneNumberFromString } = require('libphonenumber-js');
 
 const csrfToken = crypto.randomBytes(32).toString('hex');
 res.cookie('XSRF-TOKEN', csrfToken, { httpOnly: false, sameSite: 'strict', secure: true });
-const secret = '6LfWndMrAAAAAInmLjVcQecayj4iXFVrnW_0Lait'; // из Google Cloud Console
-const response = await axios.post(verifyUrl);
-const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${secret}&response=${response}`;
-
-const res = await fetch(verifyUrl, { method: 'POST' });
-const data = response.data;
-
-if (!data.success || data.score < 0.5) { // порог настраивается
-  return res.status(400).send('reCAPTCHA failed');
-}
 
 
 // ###################################################
@@ -81,10 +71,6 @@ initDatabase()
         process.exit(1); // ← завершаем процесс, если БД не готова
     });
 
-// --- Запуск сервера ---
-const server = app.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
-});
 
 // Обработка ошибок сервера
 server.on('error', (err) => {
@@ -161,6 +147,29 @@ app.get('/', (req, res) => {
 
 // Загрузка файла (без капчи)
 app.post('/upload', upload.array('image', 20), async (req, res) => {
+    const secret = '6LfWndMrAAAAAInmLjVcQecayj4iXFVrnW_0Lait';
+    const clientResponse = req.body['g-recaptcha-response'];
+    if (!clientResponse) {
+        return res.status(400).send('reCAPTCHA required');
+    }
+
+    try {
+        const verifyRes = await axios.post('https://www.google.com/recaptcha/api/siteverify', null, {
+            params: {
+                secret,
+                response: clientResponse
+            }
+        });
+        const data = verifyRes.data;
+        if (!data.success || data.score < 0.5) {
+            return res.status(400).send('reCAPTCHA failed');
+        }
+    } catch (err) {
+        console.error('reCAPTCHA verify error:', err);
+        return res.status(500).send('reCAPTCHA verification error');
+    }
+
+    
     try {
         if (!req.files || req.files.length === 0) {
             return res.status(400).send('Файлы не выбраны');
