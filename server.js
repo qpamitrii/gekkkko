@@ -16,6 +16,9 @@ const passwords = {};
 const viewCounts = {};
 const cookieParser = require('cookie-parser');
 const sharp = require('sharp');
+const crypto = require('crypto');
+const fetch = require('node-fetch');
+const axios = require('axios');
 // Хранилище: fileId → groupFileId (если файл в группе)
 const fileToGroup = {};
 
@@ -24,11 +27,11 @@ const { parsePhoneNumberFromString } = require('libphonenumber-js');
 const csrfToken = crypto.randomBytes(32).toString('hex');
 res.cookie('XSRF-TOKEN', csrfToken, { httpOnly: false, sameSite: 'strict', secure: true });
 const secret = '6LfWndMrAAAAAInmLjVcQecayj4iXFVrnW_0Lait'; // из Google Cloud Console
-const response = req.body['g-recaptcha-response'];
+const response = await axios.post(verifyUrl);
 const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${secret}&response=${response}`;
 
 const res = await fetch(verifyUrl, { method: 'POST' });
-const data = await res.json();
+const data = response.data;
 
 if (!data.success || data.score < 0.5) { // порог настраивается
   return res.status(400).send('reCAPTCHA failed');
@@ -57,31 +60,26 @@ delete process.env.DATABASE_URL; // ← чтобы не засветить в л
         rejectUnauthorized: false
     }
 });*/
-// ✅ Создаём таблицы при старте, если их нет
-async function initDatabase() {
-    try {
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS uploads (
-                id SERIAL PRIMARY KEY,
-                file_id VARCHAR(255) NOT NULL UNIQUE,
-                phone VARCHAR(50) NOT NULL,
-                ip_address VARCHAR(45) NOT NULL,
-                created_at TIMESTAMPTZ DEFAULT NOW()
-            );
-        `);
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS upload_logs (
-                id SERIAL PRIMARY KEY,
-                ip_address VARCHAR(45) NOT NULL,
-                created_at TIMESTAMPTZ DEFAULT NOW()
-            );
-        `);
-        console.log('✅ Таблицы uploads и upload_logs готовы');
-    } catch (err) {
-        console.error('❌ Ошибка инициализации БД:', err);
-        process.exit(1);
-    }
-}
+// Запуск сервера — ТОЛЬКО ПОСЛЕ успешной инициализации БД
+initDatabase()
+    .then(() => {
+        const server = app.listen(PORT, () => {
+            console.log(`🚀 Server running on http://localhost:${PORT}`);
+        });
+        server.on('error', (err) => {
+            if (err.code === 'EADDRINUSE') {
+                console.error(`❌ Порт ${PORT} уже занят.`);
+                process.exit(1);
+            } else {
+                console.error('❌ Неизвестная ошибка сервера:', err);
+                process.exit(1);
+            }
+        });
+    })
+    .catch(err => {
+        console.error('❌ Не удалось инициализировать БД:', err);
+        process.exit(1); // ← завершаем процесс, если БД не готова
+    });
 
 // --- Запуск сервера ---
 const server = app.listen(PORT, () => {
@@ -1251,4 +1249,10 @@ app.use((req, res, next) => {
         "object-src 'none';"
     );
     next();
+});
+
+
+process.on('uncaughtException', (err) => {
+    console.error('Unhandled Exception:', err);
+    process.exit(1);
 });
