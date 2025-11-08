@@ -89,7 +89,22 @@ async function initDatabase() {
 }
 
 
-initDatabase();
+// ✅ 1. Инициализируем БД, 2. Запускаем сервер ТОЛЬКО после успеха
+initDatabase()
+    .then(() => {
+        const server = app.listen(PORT, () => {
+            console.log(`🚀 Server running on http://localhost:${PORT}`);
+        });
+
+        server.on('error', (err) => {
+            console.error('❌ Server error:', err);
+            process.exit(1);
+        });
+    })
+    .catch(err => {
+        console.error('❌ Fatal: DB init failed, cannot start server:', err);
+        process.exit(1);
+    });
 
 
 
