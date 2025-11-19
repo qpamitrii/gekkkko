@@ -308,7 +308,7 @@ app.post('/upload', upload.array('image', 20), async (req, res) => {
             fileIds.push(fileId); // ← Это ключевое изменение!
 
 
-            
+
             
 
             // ✅ Сохраняем метаданные — один раз для группы, или для каждого файла
@@ -896,12 +896,16 @@ app.get('/:fileId', checkPassword, (req, res) => {
     let descriptionText = '';
 
     if (typeof meta === 'object' && meta.files) {
+        // Это группа
         files = meta.files;
         descriptionText = meta.description || '';
-    } else {
-        // Это одиночный файл — уже обработано выше, но на всякий случай:
+    } else if (typeof meta === 'string') {
+        // Это одиночный файл
         files = [fileId];
-        descriptionText = meta || '';
+        descriptionText = meta;
+    } else {
+        // Неизвестный тип или файл не найден
+        return res.status(404).send('File not found');
     }
 
     let imagesHtml = '';
