@@ -172,33 +172,37 @@ app.get('/', (req, res) => {
 
 // Загрузка файла (без капчи)
 app.post('/upload', upload.array('image', 20), async (req, res) => {
-    const secret = '6LcNXgYsAAAAAIpkzbh4nsmwmC9CPxwlJYEZ3Q8z';
-    const clientResponse = req.body['g-recaptcha-response'];
-    if (!clientResponse) {
-        return res.status(400).send('reCAPTCHA required');
-    }
-
-    try {
-        const verifyRes = await axios.post('https://www.google.com/recaptcha/api/siteverify', null, {
-            params: {
-                secret,
-                response: clientResponse
-            }
-        });
-        const data = verifyRes.data;
-        if (!data.success || data.score < 0.5) {
-            return res.status(400).send('reCAPTCHA failed');
-        }
-    } catch (err) {
-        console.error('reCAPTCHA verify error:', err);
-        return res.status(500).send('reCAPTCHA verification error');
-    }
-
-    
     try {
         if (!req.files || req.files.length === 0) {
             return res.status(400).send('Файлы не выбраны');
         }
+
+        // 🔐 Проверка reCAPTCHA v3
+        const clientResponse = req.body['g-recaptcha-response'];
+        if (!clientResponse) {
+            return res.status(400).send('reCAPTCHA token missing');
+        }
+
+        try {
+            const verifyRes = await axios.post('https://www.google.com/recaptcha/api/siteverify', null, {
+                params: {
+                    secret: process.env.RECAPTCHA_SECRET,
+                    response: clientResponse
+                }
+            });
+            const data = verifyRes.data;
+
+            // Опционально: можно понизить порог — v3 возвращает score от 0.0 до 1.0
+            if (!data.success || data.score < 0.5) {
+                console.warn('reCAPTCHA failed:', data);
+                return res.status(400).send('reCAPTCHA verification failed');
+            }
+        } catch (err) {
+            console.error('reCAPTCHA verify error:', err);
+            return res.status(500).send('reCAPTCHA service unavailable');
+        }
+        //#################################
+
 
         const fileIds = [];
 

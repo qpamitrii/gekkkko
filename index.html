@@ -13,10 +13,8 @@
     <link href="/css/app.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <script src="https://www.google.com/recaptcha/api.js"></script>
-    <!--[if lt IE 9]>
-      <script src="js/html5shiv.js"></script>
-    <![endif]-->
+    <!-- В <head>, после CSS -->
+    <script src="https://www.google.com/recaptcha/api.js?render=6LcNXgYsAAAAAHiMHiqhgzETCBzl2JKmqiUldKJu"></script>
 </head>
 
 <script>
@@ -30,27 +28,7 @@
     });
 
     // Инициализация reCAPTCHA и сохранение токена в скрытом поле
-    function onloadCallback() {
-        grecaptcha.render('recaptcha-container', {
-            'sitekey': '6LcNXgYsAAAAAHiMHiqhgzETCBzl2JKmqiUldKJu',
-            'callback': function(response) {
-                // Сохраняем токен в скрытое поле
-                document.getElementById('g-recaptcha-response').value = response;
-            },
-            'expired-callback': function() {
-                // Очистка при истечении срока действия
-                document.getElementById('g-recaptcha-response').value = '';
-            }
-        });
-    }
-    // Запускаем при загрузке страницы
-    document.addEventListener('DOMContentLoaded', function() {
-        if (typeof grecaptcha !== 'undefined') {
-            onloadCallback();
-        } else {
-            console.error('reCAPTCHA script not loaded');
-        }
-    });
+    
 </script>
 
 <body>
@@ -65,7 +43,7 @@
         <div class="row">
             <div class="col-md-10 col-md-offset-1">
                 <form action="/upload" method="POST" id="uploadForm" class="form" aria-label="Upload" enctype="multipart/form-data">
-<!-- капча -->               <!--<input type="hidden" name="g-recaptcha-response" id="g-recaptcha-response" value=""> -->
+<!-- капча -->               <input type="hidden" name="g-recaptcha-response" id="g-recaptcha-response">
                     
                     <div class="form-group">
                         <div class="panel panel-success main-load-container">
@@ -261,40 +239,37 @@
 
                 $('#phoneModal').modal('hide');
 
-                // ✅ reCAPTCHA v3: получаем токен автоматически
+                // 🔐 Запускаем reCAPTCHA и получаем токен
                 grecaptcha.ready(() => {
-                    // ← ИСПОЛЬЗУЙТЕ ОДИН site key — тот, что в Google Console для v3
-                    grecaptcha.execute('6LcNXgYsAAAAAHiMHiqhgzETCBzl2JKmqiUldKJu', { action: 'upload' })
-                        .then(token => {
-                            // Добавляем скрытое поле с токеном
-                            let recaptchaField = document.querySelector('input[name="g-recaptcha-response"]');
-                            if (!recaptchaField) {
-                                recaptchaField = document.createElement('input');
-                                recaptchaField.type = 'hidden';
-                                recaptchaField.name = 'g-recaptcha-response';
-                                document.getElementById('uploadForm').appendChild(recaptchaField);
+                    grecaptcha.execute('ВАШ_SITE_KEY', { action: 'upload' }).then(token => {
+                        // Сохраняем токен в форму
+                        document.getElementById('g-recaptcha-response').value = token;
+
+                        // Отправляем
+                        const status = document.getElementById('uploadStatus');
+                        status.textContent = 'Uploading...';
+                        status.style.display = 'block';
+
+                        const formData = new FormData(document.getElementById('uploadForm'));
+                        fetch('/upload', {
+                            method: 'POST',
+                            body: formData
+                        })
+                        .then(res => {
+                            if (res.redirected) {
+                                window.location.href = res.url;
+                            } else {
+                                return res.text().then(err => { throw new Error(err); });
                             }
-                            recaptchaField.value = token;
-
-                            const status = document.getElementById('uploadStatus');
-                            status.textContent = 'Uploading...';
-                            status.style.display = 'block';
-
-                            const formData = new FormData(document.getElementById('uploadForm'));
-                            fetch('/upload', {
-                                method: 'POST',
-                                body: formData
-                            })
-                            .then(res => res.redirected ? window.location.href = res.url : res.text().then(err => { throw new Error(err); }))
-                            .catch(err => {
-                                status.textContent = 'Error: ' + err.message;
-                                console.error(err);
-                            });
                         })
                         .catch(err => {
-                            console.error('reCAPTCHA v3 failed:', err);
-                            alert('Ошибка проверки безопасности. Попробуйте обновить страницу.');
+                            status.textContent = 'Error: ' + err.message;
+                            console.error('Upload failed:', err);
                         });
+                    }).catch(err => {
+                        console.error('reCAPTCHA execution failed:', err);
+                        alert('Ошибка проверки безопасности. Попробуйте обновить страницу.');
+                    });
                 });
             };
         });
