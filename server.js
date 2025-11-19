@@ -345,10 +345,14 @@ app.post('/upload', upload.array('image', 20), async (req, res) => {
                     }
                 }
 
-                // Добавляем fileId этого файла в список группы
+                // Добавляем fileId этого файла в список группы, только если его там еще нет
                 if (descriptions[groupFileId] && Array.isArray(descriptions[groupFileId].files)) {
-                    descriptions[groupFileId].files.push(fileId);
-                    fileToGroup[fileId] = groupFileId;
+                    if (!descriptions[groupFileId].files.includes(fileId)) {
+                        descriptions[groupFileId].files.push(fileId);
+                        fileToGroup[fileId] = groupFileId;
+                    } else {
+                        console.warn(`Файл ${fileId} уже существует в группе ${groupFileId}`);
+                    }
                 }
             }
         }
