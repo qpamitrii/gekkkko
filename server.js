@@ -275,7 +275,6 @@ app.post('/upload', upload.array('image', 20), async (req, res) => {
 
             
 
-            // ✅ Сохраняем метаданные — но только один раз для группы
             // ✅ Сохраняем метаданные — один раз для группы, или для каждого файла
             if (!makeOnePost) {
                 // Для одиночных файлов — просто описание
@@ -350,45 +349,18 @@ app.post('/upload', upload.array('image', 20), async (req, res) => {
         }
 
 
-        // После цикла for
-        if (fileIds.length === 0) {
-            return res.status(500).send('Не удалось обработать ни один файл');
-        }
-
-        const mainFileId = fileIds[0]; // ← ЭТО ОБЯЗАТЕЛЬНО!
-        const uploadId = makeOnePost ? groupFileId : mainFileId;
-
-        let firstFilePath = null;
-        let firstFileId = null;
-
-        for (const fileId of fileIds) {
-    // Пропускаем groupFileId, если это группа — он не файл!
-    if (makeOnePost && fileId === groupFileId) {
-        continue;
+        // После цикла for (обработка всех файлов)
+    if (fileIds.length === 0) {
+        return res.status(500).send('Не удалось обработать ни один файл');
     }
 
-    const possibleExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
-    for (const ext of possibleExtensions) {
-        const candidate = path.join(__dirname, 'storage', `${fileId}${ext}`);
-        if (fs.existsSync(candidate)) {
-            firstFilePath = candidate;
-            firstFileId = fileId;
-            break;
-        }
-    }
-    if (firstFilePath) break;
-}
-
-if (!firstFilePath) {
-    return res.status(500).send(`Не удалось найти ни один файл в storage.`);
-}
+    // ✅ Убираем поиск файла на диске по mainFileId
+    // Вместо этого просто используем uploadId для редиректа
+    const uploadId = makeOnePost ? groupFileId : fileIds[0];
 
         // ✅ Формируем полную ссылку на изображение
         const host = `${req.protocol}://${req.get('host')}`;
-        //const uploadId = `${host}/storage/${mainFileId}${fileExt}`;
-
-        // ✅ Получаем пароль из описаний (если он есть)
-        //const password = passwords[mainFileId] || null; // Используйте null, если пароля нет
+        //const uploadURL = `${host}/storage/${mainFileId}${fileExt}`;
 
         // ✅ Сохраняем в БД: сначала запись в uploads
         const uploadSql = `
