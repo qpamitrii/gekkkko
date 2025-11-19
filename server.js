@@ -183,10 +183,11 @@ app.post('/upload', upload.array('image', 20), async (req, res) => {
             return res.status(400).send('reCAPTCHA token missing');
         }
 
+        const secret = '6LcNXgYsAAAAAIpkzbh4nsmwmC9CPxwlJYEZ3Q8z'; // ← ваш SECRET (не site key!)
         try {
             const verifyRes = await axios.post('https://www.google.com/recaptcha/api/siteverify', null, {
                 params: {
-                    secret: process.env.RECAPTCHA_SECRET,
+                    secret: process.env.RECAPTCHA_SECRET || secret,
                     response: clientResponse
                 }
             });
