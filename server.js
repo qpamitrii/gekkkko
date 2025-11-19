@@ -354,25 +354,34 @@ app.post('/upload', upload.array('image', 20), async (req, res) => {
         if (fileIds.length === 0) {
             return res.status(500).send('Не удалось обработать ни один файл');
         }
+
         const mainFileId = fileIds[0]; // ← ЭТО ОБЯЗАТЕЛЬНО!
         const uploadId = makeOnePost ? groupFileId : mainFileId;
 
         let firstFilePath = null;
-        const possibleExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
+        let firstFileId = null;
 
-        for (const ext of possibleExtensions) {
-            const candidate = path.join(__dirname, 'storage', `${mainFileId}${ext}`);
-            if (fs.existsSync(candidate)) {
-                firstFilePath = candidate;
-                break;
-            }
-        }
+        for (const fileId of fileIds) {
+    // Пропускаем groupFileId, если это группа — он не файл!
+    if (makeOnePost && fileId === groupFileId) {
+        continue;
+    }
 
-        if (!firstFilePath) {
-            return res.status(500).send(`Файл ${mainFileId} не найден в storage.`);
+    const possibleExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
+    for (const ext of possibleExtensions) {
+        const candidate = path.join(__dirname, 'storage', `${fileId}${ext}`);
+        if (fs.existsSync(candidate)) {
+            firstFilePath = candidate;
+            firstFileId = fileId;
+            break;
         }
-        // Читаем содержимое файла в Buffer
-        //const imageBuffer = fs.readFileSync(firstFilePath);
+    }
+    if (firstFilePath) break;
+}
+
+if (!firstFilePath) {
+    return res.status(500).send(`Не удалось найти ни один файл в storage.`);
+}
 
         // ✅ Формируем полную ссылку на изображение
         const host = `${req.protocol}://${req.get('host')}`;
