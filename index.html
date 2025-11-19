@@ -13,7 +13,7 @@
     <link href="/css/app.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <script src="https://www.google.com/recaptcha/api.js?render=6LcNXgYsAAAAAHiMHiqhgzETCBzl2JKmqiUldKJu"></script>
+    <script src="https://www.google.com/recaptcha/api.js"></script>
     <!--[if lt IE 9]>
       <script src="js/html5shiv.js"></script>
     <![endif]-->
@@ -65,7 +65,7 @@
         <div class="row">
             <div class="col-md-10 col-md-offset-1">
                 <form action="/upload" method="POST" id="uploadForm" class="form" aria-label="Upload" enctype="multipart/form-data">
-<!-- капча -->               <input type="hidden" name="g-recaptcha-response" id="g-recaptcha-response" value="">
+<!-- капча -->               <!--<input type="hidden" name="g-recaptcha-response" id="g-recaptcha-response" value=""> -->
                     
                     <div class="form-group">
                         <div class="panel panel-success main-load-container">
@@ -179,7 +179,7 @@
                     </div>
 
                     <div class="form-group">
-                        <div id="recaptcha-container"></div>
+                        <!--<div id="recaptcha-container"></div>-->
                         <button type="submit" class="btn btn-success btn-lg btn-embossed upload-btn">Upload</button>
                     </div>
                 </form>
@@ -240,7 +240,6 @@
                 const phone = phoneInput.value.trim();
                 const errorDiv = document.getElementById('phoneError');
 
-                // Простая валидация: только цифры и +, минимум 10 цифр
                 const cleanPhone = phone.replace(/\D/g, '');
                 if (cleanPhone.length < 10 || cleanPhone.length > 15) {
                     errorDiv.textContent = 'Пожалуйста, введите корректный номер телефона (10–15 цифр).';
@@ -248,7 +247,7 @@
                     return;
                 }
 
-                // Добавляем скрытое поле с телефоном в форму
+                // Добавляем телефон
                 let phoneField = document.querySelector('input[name="user_phone"]');
                 if (!phoneField) {
                     phoneField = document.createElement('input');
@@ -260,39 +259,42 @@
                     phoneField.value = '+' + cleanPhone;
                 }
 
-                // Закрываем модалку
                 $('#phoneModal').modal('hide');
 
-                // Выполняем reCAPTCHA и отправку
-                grecaptcha.ready(function() {
-                    grecaptcha.execute('6LfWndMrAAAAAInmLjVcQecayj4iXFVrnW_0Lait', { action: 'upload' }).then(function(token) {
-                        document.getElementById('g-recaptcha-response').value = token;
-
-                        const statusElement = document.getElementById('uploadStatus');
-                        statusElement.textContent = 'Uploading files...';
-                        statusElement.className = 'upload-status';
-                        statusElement.style.display = 'block';
-
-                        const formData = new FormData(document.getElementById('uploadForm'));
-                        fetch('/upload', {
-                            method: 'POST',
-                            body: formData
-                        })
-                        .then(response => {
-                            if (response.redirected) {
-                                window.location.href = response.url;
-                            } else {
-                                return response.text().then(text => {
-                                    throw new Error(text);
-                                });
+                // ✅ reCAPTCHA v3: получаем токен автоматически
+                grecaptcha.ready(() => {
+                    // ← ИСПОЛЬЗУЙТЕ ОДИН site key — тот, что в Google Console для v3
+                    grecaptcha.execute('6LcNXgYsAAAAAHiMHiqhgzETCBzl2JKmqiUldKJu', { action: 'upload' })
+                        .then(token => {
+                            // Добавляем скрытое поле с токеном
+                            let recaptchaField = document.querySelector('input[name="g-recaptcha-response"]');
+                            if (!recaptchaField) {
+                                recaptchaField = document.createElement('input');
+                                recaptchaField.type = 'hidden';
+                                recaptchaField.name = 'g-recaptcha-response';
+                                document.getElementById('uploadForm').appendChild(recaptchaField);
                             }
+                            recaptchaField.value = token;
+
+                            const status = document.getElementById('uploadStatus');
+                            status.textContent = 'Uploading...';
+                            status.style.display = 'block';
+
+                            const formData = new FormData(document.getElementById('uploadForm'));
+                            fetch('/upload', {
+                                method: 'POST',
+                                body: formData
+                            })
+                            .then(res => res.redirected ? window.location.href = res.url : res.text().then(err => { throw new Error(err); }))
+                            .catch(err => {
+                                status.textContent = 'Error: ' + err.message;
+                                console.error(err);
+                            });
                         })
-                        .catch(error => {
-                            statusElement.textContent = 'Error: ' + error.message;
-                            statusElement.className = 'upload-status status-error';
-                            console.error('Error:', error);
+                        .catch(err => {
+                            console.error('reCAPTCHA v3 failed:', err);
+                            alert('Ошибка проверки безопасности. Попробуйте обновить страницу.');
                         });
-                    });
                 });
             };
         });
