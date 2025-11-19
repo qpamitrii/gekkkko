@@ -268,11 +268,47 @@ app.post('/upload', upload.array('image', 20), async (req, res) => {
             // ✅ Получаем fileId для этого файла
             const fileId = path.basename(filePath, path.extname(filePath));
 
-            // ✅ Если makeOnePost — используем groupFileId, иначе — fileId файла
-            const finalFileId = makeOnePost ? groupFileId : fileId;
-            // ✅ Массив для хранения всех fileId (или groupFileId)
-            fileIds.push(finalFileId);
+            // ✅ Сохраняем метаданные — один раз для группы, или для каждого файла
+            if (!makeOnePost) {
+                // Для одиночных файлов — просто описание
+                descriptions[fileId] = description;
+                // Пароль и автоудаление — на каждый файл отдельно
+                if (req.body.allow_password && req.body.password && req.body.password.length >= 6) {
+                    passwords[fileId] = req.body.password;
+                }
+                if (req.body.allow_selfdestruct && req.body.selfdestruct) {
+                    const views = parseInt(req.body.selfdestruct);
+                    if (views >= 1 && views <= 100) {
+                        viewCounts[fileId] = {
+                            limit: views,
+                            current: 0
+                        };
+                    }
+                }
+            } else {
+                // Для группы — сохраняем объект { description, files: [...] }
+                if (i === 0) {
+                    descriptions[groupFileId] = {
+                        description: description,
+                        files: [] // будем заполнять
+                    };
+                    // Пароль и автоудаление — привязываем к groupFileId (один на всю группу)
+                    if (req.body.allow_password && req.body.password && req.body.password.length >= 6) {
+                        passwords[groupFileId] = req.body.password;
+                    }
+                }
+                // Добавляем fileId этого файла в список группы
+                if (descriptions[groupFileId] && Array.isArray(descriptions[groupFileId].files)) {
+                    descriptions[groupFileId].files.push(fileId);
+                    fileToGroup[fileId] = groupFileId;
+                }
+            }
 
+            // ✅ ВСЕГДА добавляем в fileIds реальный fileId файла
+            fileIds.push(fileId); // ← Это ключевое изменение!
+
+
+            
             
 
             // ✅ Сохраняем метаданные — один раз для группы, или для каждого файла
