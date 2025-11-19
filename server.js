@@ -351,7 +351,7 @@ app.post('/upload', upload.array('image', 20), async (req, res) => {
                         descriptions[groupFileId].files.push(fileId);
                         fileToGroup[fileId] = groupFileId;
                     } else {
-                        console.warn(`Файл ${fileId} уже существует в группе ${groupFileId}`);
+                        
                     }
                 }
             }
