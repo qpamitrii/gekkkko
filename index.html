@@ -17,19 +17,6 @@
     <script src="https://www.google.com/recaptcha/api.js?render=6LcNXgYsAAAAAHiMHiqhgzETCBzl2JKmqiUldKJu"></script>
 </head>
 
-<script>
-    document.querySelector('input[name="resize"]').addEventListener('change', function() {
-        const resizeOptions = document.getElementById('resizeOptions');
-        if (this.checked) {
-            resizeOptions.style.display = 'block';
-        } else {
-            resizeOptions.style.display = 'none';
-        }
-    });
-
-    // Инициализация reCAPTCHA и сохранение токена в скрытом поле
-    
-</script>
 
 <body>
     <div class="masthead main-masthead">
@@ -202,8 +189,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const resizeCheckbox = document.querySelector('input[name="resize"]');
     if (resizeCheckbox) {
         resizeCheckbox.addEventListener('change', function () {
-            const el = document.getElementById('resizeOptions');
-            el.style.display = this.checked ? 'block' : 'none';
+            const resizeOptions = document.getElementById('resizeOptions');
+            if (resizeOptions) {
+                resizeOptions.style.display = this.checked ? 'block' : 'none';
+            }
         });
     }
 
