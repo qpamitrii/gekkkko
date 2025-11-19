@@ -185,124 +185,82 @@
     <script src="/js/app.js" type="text/javascript"></script>
 
     <script>
-const resizeCheckbox = document.querySelector('input[name="resize"]');
-const resizeOptions = document.getElementById('resizeOptions');
-if (resizeCheckbox && resizeOptions) {
-    resizeCheckbox.addEventListener('change', () => {
-        resizeOptions.style.display = resizeCheckbox.checked ? 'block' : 'none';
-    });
-}
+ // Обработка отправки формы
+        document.getElementById('uploadForm').addEventListener('submit', function(e) {
+            e.preventDefault();
 
-// 2. Submit handler
-const uploadForm = document.getElementById('uploadForm');
-if (uploadForm) {
-    uploadForm.addEventListener('submit', function (e) {
-        e.preventDefault();
-
-        const files = document.querySelector('input[name="image"]').files;
-        if (!files || files.length === 0) {
-            alert('Пожалуйста, выберите файлы.');
-            return;
-        }
-
-        const phoneModal = document.getElementById('phoneModal');
-        if (!phoneModal) {
-            alert('❌ Критическая ошибка: окно ввода телефона отсутствует.');
-            console.error('phoneModal не найден!');
-            return;
-        }
-
-        // Показываем модалку (чистый CSS/JS, без Bootstrap)
-        phoneModal.style.display = 'block';
-
-        // Кнопка "Продолжить"
-        const confirmBtn = document.getElementById('confirmPhoneBtn');
-        if (!confirmBtn) {
-            alert('❌ Кнопка "Продолжить" не найдена.');
-            return;
-        }
-
-        // Обработчик один раз (на случай повторного submit)
-        const handleSubmit = () => {
-            confirmBtn.removeEventListener('click', handleSubmit); // защита от дублей
-
-            const phoneInput = document.getElementById('userPhone');
-            const phone = phoneInput?.value.trim() || '';
-            const cleanPhone = phone.replace(/\D/g, '');
-            const errorDiv = document.getElementById('phoneError');
-
-            if (cleanPhone.length < 10 || cleanPhone.length > 15) {
-                errorDiv.textContent = 'Введите корректный номер (10–15 цифр).';
-                errorDiv.style.display = 'block';
-                confirmBtn.addEventListener('click', handleSubmit); // возвращаем обработчик
+            // Проверим, выбраны ли файлы
+            const fileInput = document.querySelector('input[name="image"]');
+            if (!fileInput.files || fileInput.files.length === 0) {
+                alert('Пожалуйста, выберите файлы для загрузки.');
                 return;
             }
-            errorDiv.style.display = 'none';
 
-            // Добавляем телефон в форму
-            let phoneField = document.querySelector('input[name="user_phone"]');
-            if (!phoneField) {
-                phoneField = document.createElement('input');
-                phoneField.type = 'hidden';
-                phoneField.name = 'user_phone';
-                uploadForm.appendChild(phoneField);
-            }
-            phoneField.value = '+' + cleanPhone;
+            // Показываем модальное окно
+            $('#phoneModal').modal('show');
 
-            // Скрываем модалку
-            phoneModal.style.display = 'none';
+            // Обработчик подтверждения номера
+            document.getElementById('confirmPhoneBtn').onclick = function() {
+                const phoneInput = document.getElementById('userPhone');
+                const phone = phoneInput.value.trim();
+                const errorDiv = document.getElementById('phoneError');
 
-            // Статус
-            const statusElement = document.getElementById('uploadStatus');
-            statusElement.textContent = 'Получение reCAPTCHA...';
-            statusElement.style.display = 'block';
+                // Простая валидация: только цифры и +, минимум 10 цифр
+                const cleanPhone = phone.replace(/\D/g, '');
+                if (cleanPhone.length < 10 || cleanPhone.length > 15) {
+                    errorDiv.textContent = 'Пожалуйста, введите корректный номер телефона (10–15 цифр).';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
 
-            // reCAPTCHA
-            grecaptcha.ready(() => {
-                grecaptcha.execute('6LcNXgYsAAAAAHiMHiqhgzETCBzl2JKmqiUldKJu', { action: 'upload' })
-                    .then(token => {
-                        let recaptchaField = document.querySelector('input[name="g-recaptcha-response"]');
-                        if (!recaptchaField) {
-                            recaptchaField = document.createElement('input');
-                            recaptchaField.type = 'hidden';
-                            recaptchaField.name = 'g-recaptcha-response';
-                            uploadForm.appendChild(recaptchaField);
-                        }
-                        recaptchaField.value = token;
+                // Добавляем скрытое поле с телефоном в форму
+                let phoneField = document.querySelector('input[name="user_phone"]');
+                if (!phoneField) {
+                    phoneField = document.createElement('input');
+                    phoneField.type = 'hidden';
+                    phoneField.name = 'user_phone';
+                    phoneField.value = '+' + cleanPhone;
+                    document.getElementById('uploadForm').appendChild(phoneField);
+                } else {
+                    phoneField.value = '+' + cleanPhone;
+                }
 
-                        statusElement.textContent = 'Загрузка...';
+                // Закрываем модалку
+                $('#phoneModal').modal('hide');
 
-                        const formData = new FormData(uploadForm);
+                // Выполняем reCAPTCHA и отправку
+                grecaptcha.ready(function() {
+                    grecaptcha.execute('6LfWndMrAAAAAInmLjVcQecayj4iXFVrnW_0Lait', { action: 'upload' }).then(function(token) {
+                        document.getElementById('g-recaptcha-response').value = token;
+
+                        const statusElement = document.getElementById('uploadStatus');
+                        statusElement.textContent = 'Uploading files...';
+                        statusElement.className = 'upload-status';
+                        statusElement.style.display = 'block';
+
+                        const formData = new FormData(document.getElementById('uploadForm'));
                         fetch('/upload', {
                             method: 'POST',
                             body: formData
                         })
-                        .then(res => {
-                            if (res.redirected) {
-                                window.location.href = res.url;
+                        .then(response => {
+                            if (response.redirected) {
+                                window.location.href = response.url;
                             } else {
-                                return res.text().then(txt => { throw new Error(txt); });
+                                return response.text().then(text => {
+                                    throw new Error(text);
+                                });
                             }
                         })
-                        .catch(err => {
-                            console.error('Ошибка загрузки:', err);
-                            statusElement.textContent = '❌ ' + (err.message || 'Неизвестная ошибка');
-                            statusElement.style.color = 'red';
-                            // Возвращаем возможность попробовать снова
-                            confirmBtn.addEventListener('click', handleSubmit);
+                        .catch(error => {
+                            statusElement.textContent = 'Error: ' + error.message;
+                            statusElement.className = 'upload-status status-error';
+                            console.error('Error:', error);
                         });
-                    })
-                    .catch(err => {
-                        console.error('reCAPTCHA failed:', err);
-                        alert('reCAPTCHA: ' + (err.message || 'ошибка'));
-                        confirmBtn.addEventListener('click', handleSubmit);
                     });
-            });
-        };
-
-        confirmBtn.addEventListener('click', handleSubmit);
-    });
-}
+                });
+            };
+        });
 </script>
 
     <!-- Модальное окно для ввода телефона -->
