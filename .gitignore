@@ -1,11 +1,10 @@
 .env
-node_modules/
 storage/
-ЧТО ЕЩЕ.txt
-У меня хост на рег.ру и на рендер.txt
-ошибка при хостинге на reg.ru.txt
-мб надо будет.txt
-Запрос к серверу.txt
-Заметки для Qwen.txt
-Было extension.txt
+ЧТО\ ЕЩЕ.txt
+У\ меня\ хост\ на\ рег.ру\ и\ на\ рендер.txt
+ошибка\ при\ хостинге\ на\ reg.ru.txt
+мб\ надо\ будет.txt
+Запрос\ к\ серверу.txt
+Заметки\ для\ Qwen.txt
+Было\ extension.txt
 password.txt
